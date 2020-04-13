@@ -1,8 +1,9 @@
-import myutils
+from myutils import *
 import machine
 
-l = myutils.Logger()
+l = Logger()
 l.info('Started main.py')
-myutils.wifi_connect()
-
+wifi_connect()
+wifi = network.WLAN(network.STA_IF)
+ap = network.WLAN(network.AP_IF)
 

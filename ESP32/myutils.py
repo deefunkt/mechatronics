@@ -18,12 +18,15 @@ def wifi_connect(ssid='', password=''):
         password = creds[1].split('password: ')[1].strip('\\n')
     wlan = network.WLAN(network.STA_IF) # create station interface
     wlan.active(True)
+    wlan.config(dhcp_hostname='esp32CAM')
     if not wlan.isconnected():
         print('MYUTIL: Connecting to network {}...'.format(ssid))
         wlan.connect(ssid, password)
         while not wlan.isconnected():
             pass
-    print('MYUTIL: Network config:\\n{}'.format(wlan.ifconfig()))
+    print('MYUTIL: Hostname: {}'.format(wlan.config('dhcp_hostname')))
+    print('MYUTIL: Network config:\\n(IP address, subnet mask, gateway and DNS server)\\n{}'.format(wlan.ifconfig()))
+
 
 def wifi_ap(ssid='ESP'):
     print('MYUTIL: Creating WIFI AP')
@@ -31,4 +34,3 @@ def wifi_ap(ssid='ESP'):
     ap.active(True)         # activate the interface
     ap.config(essid='ESP-AP') # set the ESSID of the access point
     print('MYUTIL: AP created: {}'.format(ssid))
-
