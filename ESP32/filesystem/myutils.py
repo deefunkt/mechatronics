@@ -27,10 +27,19 @@ def wifi_connect(ssid='', password=''):
     print('MYUTIL: Hostname: {}'.format(wlan.config('dhcp_hostname')))
     print('MYUTIL: Network config:\\n(IP address, subnet mask, gateway and DNS server)\\n{}'.format(wlan.ifconfig()))
 
-
 def wifi_ap(ssid='ESP'):
     print('MYUTIL: Creating WIFI AP')
     ap = network.WLAN(network.AP_IF) # create access-point interface
     ap.active(True)         # activate the interface
     ap.config(essid='ESP-AP') # set the ESSID of the access point
     print('MYUTIL: AP created: {}'.format(ssid))
+
+def cat(file):
+    with open(file) as f:
+        print(f.read())
+
+def cmp_file(file1, file2):
+    f1 = open(file1)
+    f2 = open(file2)
+    from uhashlib import sha1
+    return (sha1(f1.read()).digest() == sha1(f2.read()).digest())

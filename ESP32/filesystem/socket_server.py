@@ -34,17 +34,15 @@ class SocketServer:
         print(4)
         self.writer.close()
         print(5)
-        await self.reader.wait_closed()
-        await self.writer.wait_closed()
         print('closed server and streams')
         self.server = await start_server(self.callback, self.host, self.port)
         print('Created server on port {}'.format(self.port))
         await self.l.create_task(self.server)
 
     async def handle_upload(self):
-        if self.connect:
-            self.upload = True
-            await self.writer.awrite('Filename?\\n')
+        print('in upload')
+        self.upload = True
+        await self.writer.awrite('Filename?\\n')
 
     async def assign_streams(self, reader, writer):
         self.reader = reader
@@ -54,14 +52,20 @@ class SocketServer:
         self.cmd = data.decode('utf-8').strip('\\n')
         if self.upload:
             if self.cmd == 'done':
+                print('Done upload')
                 self.upload = False
+                self.file.close()
                 self.file = ''
             elif self.file == '':
                 filename = self.cmd
+                print('Filename: {}'.format(filename))
                 if not (filename == 'boot.py' or filename == 'main.py'):
-                    self.file = open(filename)
+                    print('Opened {}'.format(filename))
+                    self.file = open(filename,'w+')
+                    await self.writer.awrite('Ok. Begin upload\\n')
             else:
-                await self.file.write(data + '\\n')
+                print('Wrote {}'.format(data))
+                self.file.write(data + '\\n')
         elif self.cmd in self.funcs:
             await self.funcs[self.cmd]
         else:
