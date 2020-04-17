@@ -1,3 +1,9 @@
+'''
+TODO: implement decoding of hex/base64 encoded files
+FIXME: fix graceful server shutdown
+TODO: implement dynamic server creation rather than 2 in the beginning
+'''
+
 from uasyncio import get_event_loop, open_connection, start_server, run, sleep_ms
 from uos import urandom as rand
 

@@ -1,3 +1,7 @@
+'''
+FIXME: 2 async functions not the best idea, open comms, then sendfile.
+TODO: is it easier to just use raw python sockets? maybe desktop doesnt need async
+'''
 from asyncio import get_event_loop, open_connection, start_server, run, sleep
 
 class SocketClient:

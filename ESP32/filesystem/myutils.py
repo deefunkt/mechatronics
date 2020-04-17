@@ -1,3 +1,7 @@
+'''
+TODO: extend cmp_file to be more 'diff' like - line by line comparator. mostly formatting output.
+'''
+
 import network
 
 class Logger:
