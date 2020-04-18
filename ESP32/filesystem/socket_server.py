@@ -6,6 +6,7 @@ TODO: implement dynamic server creation rather than 2 in the beginning
 
 from uasyncio import get_event_loop, open_connection, start_server, run, sleep_ms
 from uos import urandom as rand
+from ubinascii import a2b_base64
 
 
 class SocketServer:
@@ -48,14 +49,14 @@ class SocketServer:
     async def handle_upload(self):
         print('in upload')
         self.upload = True
-        await self.writer.awrite('Filename?\\n')
+        await self.writer.awrite('Filename?\n')
 
     async def assign_streams(self, reader, writer):
         self.reader = reader
         self.writer = writer
 
     async def handle_input(self, data):
-        self.cmd = data.decode('utf-8').strip('\\n')
+        self.cmd = data.decode('utf-8').strip('\n')
         if self.upload:
             if self.cmd == 'done':
                 print('Done upload')
@@ -68,14 +69,14 @@ class SocketServer:
                 if not (filename == 'boot.py' or filename == 'main.py'):
                     print('Opened {}'.format(filename))
                     self.file = open(filename,'w+')
-                    await self.writer.awrite('Ok. Begin upload\\n')
+                    await self.writer.awrite('Ok. Begin upload\n')
             else:
-                print('Wrote {}'.format(data))
-                self.file.write(data + '\\n')
+                print('Wrote data'.format(data))
+                self.file.write(a2b_base64(data).decode('utf-8'))
         elif self.cmd in self.funcs:
             await self.funcs[self.cmd]
         else:
-            await self.writer.awrite('server echo: ' + self.cmd + '\\n')
+            await self.writer.awrite('server echo: ' + self.cmd + '\n')
             await self.writer.drain()
 
     async def callback(self, reader, writer):
@@ -83,7 +84,7 @@ class SocketServer:
         self.writer = writer
         if self.connect:
             self.greeting = self.greeting + ' >.<;'
-        await self.writer.awrite(self.greeting + '\\n')
+        await self.writer.awrite(self.greeting + '\n')
         await self.writer.drain()
         while True:
             print('Waiting for data')
@@ -98,7 +99,7 @@ class SocketServer:
 
     async def exit_server(self):
         print('closing writer stream')
-        await self.writer.awrite(':(\\n')
+        await self.writer.awrite(':(\n')
         await self.writer.drain()
         await self.writer.aclose()
         self.server.close()

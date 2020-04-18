@@ -1,6 +1,7 @@
 from myutils import *
 from machine import reset
 from socket_server import SocketServer
+from ubinascii import a2b_base64
 
 l = Logger()
 l.info('Started main.py')

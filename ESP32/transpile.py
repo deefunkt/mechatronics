@@ -1,4 +1,5 @@
 import argparse
+from binascii import b2a_base64, a2b_base64
 
 def initialize():
     parser = argparse.ArgumentParser(description='''
@@ -19,10 +20,9 @@ Write code, run this program on the file, paste the output on the micropython se
 def convert(src_file, dest_file):
     print(f"with open('{dest_file}', 'w+') as f:")
     with open(src_file) as f:
-        file_contents = f.readlines()
-    for line in file_contents:
-        print('    f.write("' + line.strip('\n') + '\\n")')
-
+        fileread = f.read()
+    print('    f.write(a2b_base64(' + str(b2a_base64(fileread.encode('utf-8'))) + ').decode(\'utf-8\'))')
+    return str(b2a_base64(fileread.encode('utf-8')))
 
 
 if __name__ == "__main__":
@@ -34,5 +34,4 @@ if __name__ == "__main__":
     print('Copy and paste from below:\n\n')
     convert(init['src_file'], init['dest_file'])
 
-    
     
