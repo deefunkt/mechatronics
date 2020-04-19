@@ -13,110 +13,146 @@ class SocketServer:
     def __init__(self, host, port):
         self.host = host
         self.port = port
-        self.cmd = ''
         self.loop = ''
-        self.connect = False
-        self.upload = False
-        self.file = ''
-        self.greeting = 'Hi.'
+        self.conncount = 0
         self.funcs = {
-            'stop' : self.exit_server(),
-            'quit' : self.exit_server(),
-            'connect': self.perm_connect(),
-            'upload': self.handle_upload(),
+            'stop' : self.exit_server,
+            'quit' : self.quit,
+            'connect': self.perm_connect,
+            'upload': self.handle_upload,
         }
+        print('Opening server on port {}'.format(port))
+        self.server = start_server(self.callback, host, port)
+        print('Funcs avail: {}'.format(dir(self.server)))
+        self.servers = [self.server]
+        self.connections = {}
+        run(self.server)
         run(self.mainrun(self.host, self.port))
 
-    async def perm_connect(self):
-        self.connect = True
-        self.port =  int.from_bytes(rand(2), 'little')
-        await self.writer.awrite(str(self.port))
-        await self.writer.drain()
-        print(1)
-        self.server_task.cancel()
-        print(2)
-        self.l.run_until_complete(self.server.close())
-        print(3)
-        self.reader.close()
-        print(4)
-        self.writer.close()
-        print(5)
-        print('closed server and streams')
-        self.server = await start_server(self.callback, self.host, self.port)
-        print('Created server on port {}'.format(self.port))
-        await self.l.create_task(self.server)
+    async def perm_connect(self, peer):
+        self.connections[peer]['connect'] = True
+        print('Perm connection request recieved from {}'.format(peer))
+        new_port =  int.from_bytes(rand(2), 'little')
+        await self.connections[peer]['writer'].awrite(str(new_port) + '\n')
+        await self.connections[peer]['writer'].drain()
+        await self.exit_server(peer)
+        # print('Exiting task')        
+        # await self.server_task.cancel()
+        # print('Done')
+        # print('Closed server and streams')
+        self.servers.append(start_server(self.callback, self.host, new_port))
+        print('Created server on port {}'.format(new_port))
+        run(self.servers[-1])
 
-    async def handle_upload(self):
+    async def handle_upload(self, peer):
         print('in upload')
-        self.upload = True
-        await self.writer.awrite('Filename?\n')
+        self.connections[peer]['upload'] = True
+        await self.connections[peer]['writer'].awrite('Filename?\n')
 
-    async def assign_streams(self, reader, writer):
-        self.reader = reader
-        self.writer = writer
-
-    async def handle_input(self, data):
-        self.cmd = data.decode('utf-8').strip('\n')
-        if self.upload:
-            if self.cmd == 'done':
-                print('Done upload')
-                self.upload = False
-                self.file.close()
-                self.file = ''
-            elif self.file == '':
-                filename = self.cmd
+    async def handle_input(self, data, peer):
+        cmd = data.decode('utf-8').strip('\n')
+        if  self.connections[peer]['upload']:
+            if cmd == 'done':
+                print('Done upload.')
+                self.connections[peer]['upload'] = False
+                self.connections[peer]['upload_file'].close()
+                self.connections[peer]['upload_file'] = ''
+            elif self.connections[peer]['upload_file'] == '':
+                filename = cmd
                 print('Filename: {}'.format(filename))
                 if not (filename == 'boot.py' or filename == 'main.py'):
                     print('Opened {}'.format(filename))
-                    self.file = open(filename,'w+')
-                    await self.writer.awrite('Ok. Begin upload\n')
+                    self.connections[peer]['upload_file'] = open(filename,'w+')
+                    await self.connections[peer]['writer'].awrite('Ok. Begin upload.\n')
             else:
-                print('Wrote data'.format(data))
-                self.file.write(a2b_base64(data).decode('utf-8'))
-        elif self.cmd in self.funcs:
-            await self.funcs[self.cmd]
+                print('Wrote data.')
+                self.connections[peer]['upload_file'].write(a2b_base64(data).decode('utf-8'))
+        elif cmd in self.funcs:
+            await self.funcs[cmd](peer)
+        elif cmd.lower().startswith('simon says'):
+            await self.connections[peer]['writer'].awrite('Simon didn\'t say that.\n')
+            await self.connections[peer]['writer'].drain()
         else:
-            await self.writer.awrite('server echo: ' + self.cmd + '\n')
-            await self.writer.drain()
+            await self.connections[peer]['writer'].awrite('Simon says ' + cmd + '\n')
+            await self.connections[peer]['writer'].drain()
 
     async def callback(self, reader, writer):
-        self.reader = reader
-        self.writer = writer
-        if self.connect:
-            self.greeting = self.greeting + ' >.<;'
-        await self.writer.awrite(self.greeting + '\n')
-        await self.writer.drain()
+        peer = reader.get_extra_info('peername')
+        self.conncount += 1
+        print('Num connections: {}'.format(self.conncount))
+        self.connections[str(peer)] = {
+            'reader': reader,
+            'writer': writer,
+            'upload': False,
+            'perm_connected': False,
+            'upload_file': '',
+            'greeting': 'Hi.',
+            'conn_no' : self.conncount,
+            'exit' : False
+            }
+        peer = str(peer)
+        print('Connection from {}'.format(peer))
+        if self.connections[peer]['perm_connected']:
+            self.connections[peer]['greeting'] = 'Hi. >.<;'
+        await writer.awrite(self.connections[peer]['greeting'] + '\n')
+        await writer.drain()
         while True:
+            if self.connections[peer]['exit']:
+                break
             print('Waiting for data')
-            data = await self.reader.read(1024)
+            data = await reader.read(1024)
             print('server recieved: {}'.format(data))
-            print('size of data: {}'.format(len(data)))
-            await self.handle_input(data)
+            await self.handle_input(data, peer)
+        print('Closing reader writer streams')
+        reader.close()
+        writer.close()
 
     def handle_errors(self, loop, context):
         print(context['message'])
         print('{}: {}'.format(type(context['exception']), context['exception']))
 
-    async def exit_server(self):
-        print('closing writer stream')
-        await self.writer.awrite(':(\n')
-        await self.writer.drain()
-        await self.writer.aclose()
-        self.server.close()
+    async def exit_server(self, peer):
+        print('Exiting server, streams for {}'.format(peer))
+        self.connections[peer]['exit'] = True
+        self.connections[peer]['writer'].close()
+        self.connections[peer]['reader'].close()
+        await sleep_ms(20)
+        print(len(self.servers))
+        self.servers[self.connections[peer]['conn_no'] - 1].close()
+        self.conncount -= 1
+        print('Num connections: {}'.format(self.conncount))
+        print('Closed')
+ 
+    def quit(self):
+        for peer in self.connections:
+            await self.connections[peer]['writer'].awrite(':(\n')
+            await self.connections[peer]['writer'].drain()
+            await self.exit_server(peer)
         self.l.stop()
+        self.l.close()
 
-    async def busywork(self):
+    async def busywork(self, text):
         while True:
-            print('Doing busywork')
+            print('Doing busywork' + text)
             await sleep_ms(10000)
+    
+    async def pulse_led(self):
+        from machine import Pin, PWM
+        pwm2 = PWM(Pin(4), freq=5000, duty=1)
+        # a = [i for i in range(-10, 11)]
+        # seq = [math.ceil(5/math.cosh(i/3)) for i in a]
+        seq = [1, 1, 1, 1, 2, 2, 3, 4, 5, 5, 5, 5, 5, 4, 3, 2, 2, 1, 1, 1, 1]
+        while True:
+            for i in seq:
+                pwm2.duty(i)
+                await sleep_ms(50)
+
 
     async def mainrun(self, host, port):
         self.l = get_event_loop()
-        self.l.set_exception_handler(self.handle_errors)
-        print('Opening server on port {}'.format(port))
-        self.server = start_server(self.callback, host, port)
-        self.server2 = start_server(self.callback, host, 1000)
-        self.server_task = self.l.create_task(self.server)
-        self.server2_task = self.l.create_task(self.server2)
-        self.l.create_task(self.busywork())
+        # self.l.set_exception_handler(self.handle_errors)
+        self.l.create_task(self.busywork(' abc'))
+        self.l.create_task(self.pulse_led())
         self.l.run_forever()
+
+
