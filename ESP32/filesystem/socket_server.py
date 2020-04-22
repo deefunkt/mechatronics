@@ -1,12 +1,17 @@
 '''
-TODO: implement decoding of hex/base64 encoded files
-FIXME: fix graceful server shutdown
-TODO: implement dynamic server creation rather than 2 in the beginning
+FIXME: fix graceful server shutdown. Sockets arent closing, server only has  'close', 'send', 'throw', 'pend_throw' as functions. 
+    Cant find documentation in asyncio for these, is it an old version?
+    installed version checked to be v3 using print(uasyncio.__version__)
+FIXME: permanent connection not working as expected. an IP can either visit the same port because of improper socket shutdown, or 
+the server gets it wrong that the previous port has been the one who sent the message. perhaps the protocol needs to implement a 'where did you come from'
+question to the client. Alternatively uploads can be protected by an encrypted challenge.
+TODO: implement a 'ready to recieve next chunk' functionality for big files incoming
 '''
 
 from uasyncio import get_event_loop, open_connection, start_server, run, sleep_ms
 from uos import urandom as rand
 from ubinascii import a2b_base64
+from machine import Pin, PWM
 
 
 class SocketServer:
@@ -30,7 +35,7 @@ class SocketServer:
         run(self.mainrun(self.host, self.port))
 
     async def perm_connect(self, peer):
-        self.connections[peer]['connect'] = True
+        self.connections[peer]['perm_connected'] = True
         print('Perm connection request recieved from {}'.format(peer))
         new_port =  int.from_bytes(rand(2), 'little')
         await self.connections[peer]['writer'].awrite(str(new_port) + '\n')
@@ -45,6 +50,7 @@ class SocketServer:
         run(self.servers[-1])
 
     async def handle_upload(self, peer):
+        # if self.connections[peer]['perm_connected']:
         print('in upload')
         self.connections[peer]['upload'] = True
         await self.connections[peer]['writer'].awrite('Filename?\n')
@@ -123,7 +129,7 @@ class SocketServer:
         print('Num connections: {}'.format(self.conncount))
         print('Closed')
  
-    def quit(self):
+    def quit(self, peer):
         for peer in self.connections:
             await self.connections[peer]['writer'].awrite(':(\n')
             await self.connections[peer]['writer'].drain()
@@ -131,13 +137,19 @@ class SocketServer:
         self.l.stop()
         self.l.close()
 
-    async def busywork(self, text):
+    async def get_time(self):
+        print('Importing urequests')
+        import urequests as r
         while True:
-            print('Doing busywork' + text)
-            await sleep_ms(10000)
+            try:
+                resp = r.get('https://worldtimeapi.org/api/ip')
+                print('Current time: {}'.format(resp.json()['datetime'][0:16]))
+            except Exception as e:
+                print(repr(e))
+            finally:
+                await sleep_ms(1800000)
     
     async def pulse_led(self):
-        from machine import Pin, PWM
         pwm2 = PWM(Pin(4), freq=5000, duty=1)
         # a = [i for i in range(-10, 11)]
         # seq = [math.ceil(5/math.cosh(i/3)) for i in a]
@@ -151,7 +163,7 @@ class SocketServer:
     async def mainrun(self, host, port):
         self.l = get_event_loop()
         # self.l.set_exception_handler(self.handle_errors)
-        self.l.create_task(self.busywork(' abc'))
+        self.l.create_task(self.get_time())
         self.l.create_task(self.pulse_led())
         self.l.run_forever()
 

@@ -2,37 +2,55 @@
 FIXME: 2 async functions not the best idea, open comms, then sendfile.
 TODO: is it easier to just use raw python sockets? maybe desktop doesnt need async
 '''
-from asyncio import get_event_loop, open_connection, start_server, run, sleep
 
-class SocketClient:
-    def __init__(self, host, port):
-        self.host = host
-        self.port = port
-        self.connection = ''
-        self.reader = ''
-        self.writer = ''
-        run(self.init_loop())
+import argparse
+import socket
+from time import sleep
+from transpile import convert
 
-    async def init_loop(self):
-        self.l = get_event_loop()
-        self.l.create_task(self.open_comms())
-        self.l.create_task(self.send_file())
-        self.l.run_forever()
-        
-    async def send_file(self):
+'''
+Opens a connection to ESP32 board and sends a file over.'''
+
+def send(src_file, dest_file, data, HOST = '10.0.0.32', PORT = 8888):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        print(f'Opening connection to {HOST}:{PORT}')
+        s.connect((HOST, PORT))
+        sleep(1)
+        connection = ''
+        s.sendall(b'Hello ESP.')
         while True:
-            tosend = input()
-            print(tosend)
-            await self.writer.awrite(tosend)
-            await self.writer.drain()
-
-    async def open_comms(self):
-        await sleep(2)  # Allow server to get up
-        print('Opening connection to {}:{}'.format(self.host, self.port))
-        self.reader, self.writer = await open_connection(self.host, self.port)
-        while True:
-            recdata = await self.reader.readline()
-            print(recdata)
-
-client = SocketClient('10.0.0.32', '8888')
-
+            data = s.recv(1024).decode('utf-8')
+            if 'Hi.' in data:
+                if connection == '':
+                    s.sendall(b'connect')
+                    connection = 'requested'
+                elif connection == 'made':
+                    s.sendall(b'upload')
+                print('Recieved greeting')
+            elif 'simon says' in data.lower():
+                pass
+            elif connection == 'requested':
+                newport = int(data)
+                print(f'port recieved {newport}')
+                s.close()
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.connect((HOST, newport))
+                sleep(1)
+                connection = 'made'
+            elif connection == 'made':
+                if 'Filename?' in data:
+                    s.sendall(src_file.encode())
+                    sleep(1)
+                    s.sendall(data)
+                    sleep(3)
+                    s.sendall(b'done')
+                    s.sendall(b'stop')
+            elif ':(' in data:
+                s.close()
+                break
+            print('Received', repr(data))
+    print('Exiting socket client')
+        # send
+        # recieve
+        # parse results
