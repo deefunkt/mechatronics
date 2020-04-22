@@ -39,6 +39,9 @@ def wifi_ap(ssid='ESP'):
     ap.config(essid='ESP-AP') # set the ESSID of the access point
     print('MYUTIL: AP created: {}'.format(ssid))
 
+def ls(folder):
+    os.listdir(folder)
+    
 def cat(file):
     with open(file) as f:
         print(f.read())
@@ -48,6 +51,13 @@ def cmp_file(file1, file2):
     f2 = open(file2)
     from uhashlib import sha1
     return (sha1(f1.read()).digest() == sha1(f2.read()).digest())
+
+def rm(filelist):
+    if type(filelist) == 'str':
+        os.remove(filelist)
+    elif type(filelist) == list:
+        for file in filelist:
+            os.remove(file)
 
 def rm_recurse(folder):
     print("Deleting", folder)

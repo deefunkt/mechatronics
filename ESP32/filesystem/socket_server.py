@@ -120,10 +120,12 @@ class SocketServer:
     async def exit_server(self, peer):
         print('Exiting server, streams for {}'.format(peer))
         self.connections[peer]['exit'] = True
+        await self.connections[peer]['writer'].awrite(':(\n')
+        await self.connections[peer]['writer'].drain()
         self.connections[peer]['writer'].close()
         self.connections[peer]['reader'].close()
         await sleep_ms(20)
-        print(len(self.servers))
+        print('Num active servers: {}'.format(len(self.servers)))
         self.servers[self.connections[peer]['conn_no'] - 1].close()
         self.conncount -= 1
         print('Num connections: {}'.format(self.conncount))
@@ -131,8 +133,6 @@ class SocketServer:
  
     def quit(self, peer):
         for peer in self.connections:
-            await self.connections[peer]['writer'].awrite(':(\n')
-            await self.connections[peer]['writer'].drain()
             await self.exit_server(peer)
         self.l.stop()
         self.l.close()
