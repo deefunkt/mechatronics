@@ -27,12 +27,13 @@ class SocketServer:
             'upload': self.handle_upload,
         }
         print('Opening server on port {}'.format(port))
-        self.server = start_server(self.callback, host, port)
-        print('Funcs avail: {}'.format(dir(self.server)))
-        self.servers = [self.server]
         self.connections = {}
-        run(self.server)
         run(self.mainrun(self.host, self.port))
+
+    async def server_creator(self, host, port):
+        self.server = await start_server(self.callback, host, port)
+        print('Funcs avail: {}'.format(dir(self.server)))
+        
 
     async def perm_connect(self, peer):
         self.connections[peer]['perm_connected'] = True
@@ -45,9 +46,8 @@ class SocketServer:
         # await self.server_task.cancel()
         # print('Done')
         # print('Closed server and streams')
-        self.servers.append(start_server(self.callback, self.host, new_port))
+        self.l.create_task(self.server_creator(self.host, new_port))
         print('Created server on port {}'.format(new_port))
-        run(self.servers[-1])
 
     async def handle_upload(self, peer):
         # if self.connections[peer]['perm_connected']:
@@ -94,7 +94,7 @@ class SocketServer:
             'upload_file': '',
             'greeting': 'Hi.',
             'conn_no' : self.conncount,
-            'exit' : False
+            'exit' : False,
             }
         peer = str(peer)
         print('Connection from {}'.format(peer))
@@ -125,8 +125,7 @@ class SocketServer:
         self.connections[peer]['writer'].close()
         self.connections[peer]['reader'].close()
         await sleep_ms(20)
-        print('Num active servers: {}'.format(len(self.servers)))
-        self.servers[self.connections[peer]['conn_no'] - 1].close()
+        self.server.close()
         self.conncount -= 1
         print('Num connections: {}'.format(self.conncount))
         print('Closed')
@@ -163,6 +162,7 @@ class SocketServer:
     async def mainrun(self, host, port):
         self.l = get_event_loop()
         # self.l.set_exception_handler(self.handle_errors)
+        self.l.create_task(self.server_creator(host, port))
         self.l.create_task(self.get_time())
         self.l.create_task(self.pulse_led())
         self.l.run_forever()
