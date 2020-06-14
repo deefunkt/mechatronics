@@ -67,6 +67,6 @@ def rm_recurse(folder):
             rm_recurse(folder + '/' + i)
         except:
             # or i is a file
-            os.remove(folder + '/' + d)
+            os.remove(folder + '/' + i)
     # finally remove empty folder
     os.rmdir(folder)

@@ -11,7 +11,7 @@ TODO: implement a 'ready to recieve next chunk' functionality for big files inco
 from uasyncio import get_event_loop, open_connection, start_server, run, sleep_ms
 from uos import urandom as rand
 from ubinascii import a2b_base64
-from machine import Pin, PWM
+from machine import Pin, PWM, TouchPad, reset
 
 
 class SocketServer:
@@ -25,15 +25,23 @@ class SocketServer:
             'quit' : self.quit,
             'connect': self.perm_connect,
             'upload': self.handle_upload,
+            'reset' : self.reset
         }
         print('Opening server on port {}'.format(port))
         self.connections = {}
+        self.duty_led = 800
         run(self.mainrun(self.host, self.port))
 
     async def server_creator(self, host, port):
         self.server = await start_server(self.callback, host, port)
         print('Funcs avail: {}'.format(dir(self.server)))
         
+    async def reset(self, peer):
+        if self.connections[peer]['perm_connected']:
+            await self.connections[peer]['writer'].awrite('Initiating reset' + '\n')
+            await self.connections[peer]['writer'].drain()
+            await self.exit_server(peer)
+            reset()
 
     async def perm_connect(self, peer):
         self.connections[peer]['perm_connected'] = True
@@ -42,10 +50,6 @@ class SocketServer:
         await self.connections[peer]['writer'].awrite(str(new_port) + '\n')
         await self.connections[peer]['writer'].drain()
         await self.exit_server(peer)
-        # print('Exiting task')        
-        # await self.server_task.cancel()
-        # print('Done')
-        # print('Closed server and streams')
         self.l.create_task(self.server_creator(self.host, new_port))
         print('Created server on port {}'.format(new_port))
 
@@ -78,6 +82,8 @@ class SocketServer:
         elif cmd.lower().startswith('simon says'):
             await self.connections[peer]['writer'].awrite('Simon didn\'t say that.\n')
             await self.connections[peer]['writer'].drain()
+        elif cmd.lower().startswith('update_led'):
+            self.duty_led = int(cmd.split(' ')[1].strip('\n'))
         else:
             await self.connections[peer]['writer'].awrite('Simon says ' + cmd + '\n')
             await self.connections[peer]['writer'].drain()
@@ -152,12 +158,32 @@ class SocketServer:
         pwm2 = PWM(Pin(4), freq=5000, duty=1)
         # a = [i for i in range(-10, 11)]
         # seq = [math.ceil(5/math.cosh(i/3)) for i in a]
-        seq = [1, 1, 1, 1, 2, 2, 3, 4, 5, 5, 5, 5, 5, 4, 3, 2, 2, 1, 1, 1, 1]
+        seq = [1, 1, 1, 1, 1, 1, 2, 2, 3, 3, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1]
         while True:
             for i in seq:
                 pwm2.duty(i)
                 await sleep_ms(50)
 
+    async def pulse_lightbar(self):
+        pwm2 = PWM(Pin(2), freq=1000, duty=1)
+        t = TouchPad(Pin(14))
+        # a = [i for i in range(-50, 51)]
+        # seq = [math.ceil(1023/math.cosh(i/20)) for i in a]
+        # seq= [710, 719, 728, 738, 747, 756, 765, 775, 784, 793, 802, 811, 
+        # 820, 829, 838, 846, 855, 863, 872, 880, 888, 896, 904, 912, 919, 
+        # 926, 933, 940, 947, 953, 959, 965, 971, 977, 982, 987, 991, 996, 
+        # 1000, 1003, 1007, 1010, 1013, 1015, 1017, 1019, 1021, 1022, 1023, 
+        # 1023, 1023, 1023, 1023, 1022, 1021, 1019, 1017, 1015, 1013, 1010, 
+        # 1007, 1003, 1000, 996, 991, 987, 982, 977, 971, 965, 959, 953, 947, 
+        # 940, 933, 926, 919, 912, 904, 896, 888, 880, 872, 863, 855, 846, 838, 
+        # 829, 820, 811, 802, 793, 784, 775, 765, 756, 747, 738, 728, 719, 710]
+        # seq = [math.ceil(1024/math.cosh(i/20)) for i in a]
+        seq = range(1000,1124)
+        while True:
+            # Returns a smaller number when touched
+            pwm2.duty(self.duty_led)
+            await sleep_ms(50)
+                
 
     async def mainrun(self, host, port):
         self.l = get_event_loop()
@@ -165,6 +191,7 @@ class SocketServer:
         self.l.create_task(self.server_creator(host, port))
         self.l.create_task(self.get_time())
         self.l.create_task(self.pulse_led())
+        self.l.create_task(self.pulse_lightbar())
         self.l.run_forever()
 
 
