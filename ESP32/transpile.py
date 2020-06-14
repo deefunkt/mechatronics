@@ -23,7 +23,7 @@ Write code, run this program on the file, paste the output on the micropython se
         'dest_file': args.dest_file,
         'send': args.send,
         'dest_ip': args.dest_ip,
-        'dest_port':args.dest_port
+        'dest_port': int(args.dest_port)
     }
     return init_vars
     
@@ -48,37 +48,45 @@ def send(dest_file, filedata, HOST = '10.0.0.32', PORT = 8888):
         s.sendall(b'Hello ESP.')
         while True:
             data = s.recv(1024).decode('utf-8')
+            print('Received', repr(data))
             if 'Hi.' in data:
+                print('Recieved greeting')
                 if connection == '':
+                    print('Initiating perm connect')
                     s.sendall(b'connect')
                     connection = 'requested'
                 elif connection == 'made':
+                    print('Requesting file upload')
                     s.sendall(b'upload')
-                print('Recieved greeting')
             elif 'simon says' in data.lower():
                 pass
             elif connection == 'requested':
                 newport = int(data)
-                print(f'port recieved {newport}')
-                s.close()
+                print(f'Port recieved {newport}')
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                print(f'Connecting on new port {newport}')
                 s.connect((HOST, newport))
                 sleep(1)
                 connection = 'made'
             elif connection == 'made':
                 if 'Filename?' in data:
+                    print('Sending filename')
                     s.sendall(dest_file.encode())
                     sleep(1)
+                elif 'Ok. Begin upload.' in data:
                     s.sendall(filedata)
+                    print('Done uploading')
                     sleep(3)
+                    print('Ending connection')
                     s.sendall(b'done')
-                    s.sendall(b'stop')
+                    sleep(1)
+                    s.sendall(b'reset')
+                    sleep(2)
             elif ':(' in data:
+                print('Closing socket')
                 s.shutdown(socket.SHUT_RDWR)
                 s.close()
                 print(f'Socket handles: {s.fileno()}')
-                break
-            print('Received', repr(data))
     print('Exiting socket client')
 
 if __name__ == "__main__":
@@ -89,7 +97,9 @@ if __name__ == "__main__":
     print(f"Destination filename: {init['dest_file']}")
     if init['send']:
         send(dest_file = init['dest_file'], 
-            filedata = convert(init['src_file']))
+            filedata = convert(init['src_file']),
+            PORT=init['dest_port'],
+            HOST=init['dest_ip'])
     else:
         print('Copy and paste from below:\n\n')
         print(f"with open('{init['dest_file']}', 'w+') as f:")
